@@ -49,8 +49,8 @@ Strata installed, so detection, autostart and shutdown all had to come from the 
 
 ## C. VM, GUI by menu clicks
 
-Evidence: `docs/screenshots/vm_01_bar.png` through `docs/screenshots/vm_04_restore_submenu.png`,
-and the raw log `tests/vm_switch.jsonl`.
+Evidence: the raw log `tests/vm_switch.jsonl`. The images published in `docs/assets/`
+come from the 2026-11-18 Mac Studio capture described in H, not from this VM.
 
 | Surface | Result |
 | --- | --- |
@@ -80,7 +80,8 @@ and the raw log `tests/vm_switch.jsonl`.
 | --- | --- |
 | Hardcoded Korean strings such as "복원 완료:" | fixed 2026-11-18: they moved into the `STRINGS` table in `Core.swift` |
 | macOS 27 `SMAppService` consent sheet | kept as is; the CLI reports `supported only from a .app bundle` when run outside a bundle |
-| Menu coordinate automation for screenshots | still coordinate-based. It drives the app, it is not part of it |
+| Menu coordinate automation for screenshots | still coordinate-based. It drives the app, it is not part of it. The status item is re-located before every click, because neighbouring menu bar text changes width and moves it by tens of pixels |
+| Menu row for a declared endpoint labelled `Strata` | fixed 2026-11-18 while preparing `docs/assets/menu.png`: `rebuildMenu()` in `UIApp.swift` picked the `menu.strata` string for `BackendKind.custom`. A screenshot showed it; no CLI output ever did |
 | `BackendKind.custom` detected but not switchable | fixed 2026-11-18, see F |
 | LM Studio sessions given a Strata-derived KV budget | fixed 2026-11-18: `isLocalKind` takes the endpoint base, so a backend gets a budget only from measurements it produced |
 
@@ -118,3 +119,35 @@ CLAUDE_CONFIG_DIR=/tmp/ccswitch-e2e claude --settings /tmp/ccswitch-e2e/profiles
 ```
 
 Every command above aims at `/tmp/ccswitch-e2e`, so it cannot touch a real `~/.claude`.
+
+## H. 2026-11-18, the images in `docs/assets/`
+
+The capture ran against an isolated instance, not against a real `~/.claude`. The instance
+was started from a shell that had `CLAUDE_CONFIG_DIR` exported, and `ps -wwwE -p <pid>`
+confirmed the running process carried `CLAUDE_CONFIG_DIR=/tmp/ccdemo`.
+
+```sh
+mkdir -p /tmp/ccdemo
+# its settings.json holds hooks, permissions, a statusLine and one own env key MYPRESERVED
+python3 tests/echo_server.py 19430 &
+export CLAUDE_CONFIG_DIR=/tmp/ccdemo
+claude-switch custom set --base http://127.0.0.1:19430 --token demokey1234567890 --model echo-model
+open /Applications/ClaudeAPISwitch.app    # inherits CLAUDE_CONFIG_DIR from this shell
+```
+
+The app's own `~/Library/Application Support/ClaudeAPISwitch/config.json` was copied aside,
+given `"language": "en"` for the run, and restored afterwards.
+
+Clicks went through `cua-driver` at desktop coordinates, stills through
+`screencapture -x -R<x,y,w,h>`, the recording through `screencapture -x -R<region> -V 17`.
+`cua-driver` does not list `NSMenu` windows, so no accessibility route reaches the menu:
+the status item's x was measured from a menu-bar strip capture before each click instead of
+assumed, and the row offsets were taken from a menu with no result line. The gif is that
+`demo.mov` re-encoded at 6 fps by a Swift script over AVFoundation and ImageIO
+(`AVAssetImageGenerator` plus `CGImageDestination`); this machine has no ffmpeg.
+
+After the capture the fixture instance was killed, `custom clear` removed the declared
+endpoint, the echo server was stopped, `/tmp/ccdemo` was deleted, and the app's own
+`config.json` was put back. The real `~/.claude/settings.json` md5 was
+`d4d6f6681c7ff702eecbc9b0de0f5af4` before the run and `d4d6f6681c7ff702eecbc9b0de0f5af4`
+after it, and its `env` still holds only `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.

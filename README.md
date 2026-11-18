@@ -12,6 +12,16 @@ then publishes the context window that follows from those two numbers. Claude Co
 does neither measurement. For a model id it does not recognise it guesses a context
 window and then enforces that guess.
 
+![The menu opened twice. Before the click: `Current: Official Claude API`, check mark on
+`Official Claude API`. After the click: `Current: custom · http://127.0.0.1:19430`, check
+mark on `Custom endpoint`, result line `Switched → 127.0.0.1 · echo-model` and the warning
+`engine residency not measured: no conversation-cache lines in the engine log`](docs/assets/demo.gif)
+
+One click on a declared endpoint writes the endpoint keys into the `env` block of
+`~/.claude/settings.json`. The reopened menu prints what it wrote, and prints a warning
+where a context window would go when the engine log holds no measurement to derive one
+from. The screenshots show the English UI strings; the menu also renders in Korean.
+
 ## What it fixes
 
 | Symptom | Cause | What this app does |
@@ -194,7 +204,24 @@ same entry: **Set custom endpoint…**. Detection stays live even for a hand-dec
 endpoint: `GET /v1/models` decides whether it is serving, and its `meta.n_ctx` decides
 the model window. Nothing tries to start a server this app does not know how to start.
 
+![After the click. Header: `Current: custom · http://127.0.0.1:19430`, `Applies to NEW
+claude sessions`, result line `✓ Switched → 127.0.0.1 · echo-model ⚠ engine residency not
+measured: no conversation-cache lines in the engine log`. The check mark sits on
+`Custom endpoint`, and `Official Claude API`, `LM Studio (Bionic) (stopped)` and `Strata`
+stay unchecked](docs/assets/switched.png)
+
+That ⚠ line is the rule for an endpoint with no measurement: without a measured
+`bytes/token` and a measured prefill speed, no `CLAUDE_CODE_AUTO_COMPACT_WINDOW` is
+published for this endpoint.
+
 ## Menu
+
+![The menu before a click. Header: `Claude API Switch`, `Current: Official Claude API`, `Applies
+to NEW claude sessions`, `⛔ Live token load 168%`. Endpoint rows: `✓ Official Claude API`,
+`LM Studio (Bionic) (stopped)`, `Strata`, `Custom endpoint`, `Set custom endpoint…`,
+`Remove custom endpoint`. Submenus: `Model`, `Context / compaction`, `Server`. Utility
+rows: `Check status now ⌘R`, `Copy new-session command`, `Restore backup`,
+`Open settings.json`, `Open log`, `✓ Start at login`, `Quit ⌘Q`](docs/assets/menu.png)
 
 | Item | Behaviour |
 | --- | --- |
@@ -305,6 +332,7 @@ the quickest way to try a switch without a real model.
 | `docs/02_design.md` | architecture, the safety procedure, the decisions taken and the stage plan |
 | `TESTING.md` | the executed test record |
 | `SECURITY.md` | what the binary touches, and how secrets are handled |
+| `docs/assets/` | `menu.png` (the menu before a click), `switched.png` (the menu after one click), `demo.gif` (the same click, recorded). All three were captured on macOS 27 against an isolated instance whose `CLAUDE_CONFIG_DIR` was a fixture directory, with the English UI strings selected |
 
 ## License
 

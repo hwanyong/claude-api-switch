@@ -11,6 +11,16 @@ LM Studio, Strata 엔진, 그리고 사용자가 선언한 Anthropic 호환 엔�
 Claude Code는 두 측정을 하지 않는다. 알지 못하는 모델 id에는 컨텍스트 창을 어림하고
 그 어림을 강제한다.
 
+![두 번 연 메뉴. 클릭 전에는 `Current: Official Claude API`이고 체크 표시가 `Official Claude API`에 있다.
+클릭 후에는 `Current: custom · http://127.0.0.1:19430`이고 체크 표시가 `Custom endpoint`로 옮기며,
+결과 줄에 `Switched → 127.0.0.1 · echo-model` 와 경고
+`engine residency not measured: no conversation-cache lines in the engine log` 가 뜬다](docs/assets/demo.gif)
+
+선언한 엔드포인트를 한 번 클릭하면 그 엔드포인트의 키가 `~/.claude/settings.json` 의 `env` 블록에 쓰인다.
+다시 연 메뉴는 쓴 값을 표시하고, 컨텍스트 창을 쓸 자리에는 엔진 로그에 측정 근거가 없어 쓰지 않았다고 적는다.
+`docs/assets/menu.png` · `docs/assets/switched.png` 는 영어 문자열로 찍은 화면이다.
+같은 메뉴는 한국어 문자열로도 렌더링된다.
+
 ## 무엇을 고치나
 
 | 증상 | 원인 | 이 앱의 동작 |
@@ -188,7 +198,22 @@ config에 저장되고 화면에는 마스킹된 꼴로만 나온다. 메뉴에�
 한다: `GET /v1/models` 가 응답 여부를 정하고, 그 응답의 `meta.n_ctx` 가 모델 창을 정한다.
 이 앱이 시작할 방법을 모르는 서버는 시작하려 하지 않는다.
 
+![클릭 뒤의 메뉴. 머리줄은 `Current: custom · http://127.0.0.1:19430`, `Applies to NEW claude sessions`,
+결과 줄은 `✓ Switched → 127.0.0.1 · echo-model ⚠ engine residency not measured: no conversation-cache
+lines in the engine log`. 체크 표시는 `Custom endpoint`에 있고 `Official Claude API`,
+`LM Studio (Bionic) (stopped)`, `Strata` 는 체크되지 않았다](docs/assets/switched.png)
+
+이 ⚠ 줄은 측정이 없을 때 창을 쓰지 않는 규칙의 결과다. 측정된 `bytes/token` 과 측정된
+프롬프트 재읽기 속도가 없으므로 이 엔드포인트에는 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 를 쓰지 않는다.
+
 ## 메뉴
+
+![전환 전의 메뉴 전체. 머리줄: `Claude API Switch`, `Current: Official Claude API`,
+`Applies to NEW claude sessions`, `⛔ Live token load 168%`. 엔드포인트 항목:
+`✓ Official Claude API`, `LM Studio (Bionic) (stopped)`, `Strata`, `Custom endpoint`,
+`Set custom endpoint…`, `Remove custom endpoint`. 서브메뉴: `Model`, `Context / compaction`,
+`Server`. 부가기능 항목: `Check status now ⌘R`, `Copy new-session command`, `Restore backup`,
+`Open settings.json`, `Open log`, `✓ Start at login`, `Quit ⌘Q`](docs/assets/menu.png)
 
 | 항목 | 동작 |
 | --- | --- |
@@ -288,7 +313,8 @@ settings.json md5: before=93e6968bdb19c6fb453d971ef4f34621 after=93e6968bdb19c6f
 `TESTING.md` 에 무엇을 어디서 돌렸는지 적었다. Mac Studio에서 실 `settings.json` 을
 상대로(백업 → 전환 → 로컬 모델 실응답 → 복원), 클린 macOS VM에서 가짜 `lms` 와 에코
 픽스처를 상대로, 그리고 GUI는 메뉴 클릭으로 조작해 확인했다. `tests/echo_server.py` 는
-`TESTING.md`의 절차가 쓰는 Anthropic 호환 픽스처로, 실제 모델 없이 전환만 미리 시험해 볼 가장 빠른 길이다.
+`TESTING.md`의 절차가 쓰는 Anthropic 호환 픽스처로, 실제 모델 없이 전환만 미리 시험해 볼
+가장 빠른 방법이다.
 
 ## 문서
 
@@ -298,6 +324,7 @@ settings.json md5: before=93e6968bdb19c6fb453d971ef4f34621 after=93e6968bdb19c6f
 | `docs/02_design.md` | 구조, 쓰기 안전 절차, 내린 결정, 단계 계획 |
 | `TESTING.md` | 실행한 시험 기록 |
 | `SECURITY.md` | 바이너리가 건드리는 자원과 시크릿 처리 |
+| `docs/assets/` | `menu.png`(클릭 전의 메뉴), `switched.png`(클릭 한 번 뒤의 메뉴), `demo.gif`(같은 클릭을 녹화한 것). 셋 모두 macOS 27에서 격리 인스턴스를 상대로 찍었다. 그 인스턴스의 `CLAUDE_CONFIG_DIR`는 픽스처 디렉터리였고, UI 문자열은 영어로 선택한 상태였다 |
 
 ## 라이선스
 
