@@ -1,0 +1,17 @@
+# SwiftPM build products
+.build/
+.swiftpm/
+Package.resolved
+
+# Bundles and release artifacts (rebuilt by dist/build_app.sh and CI)
+dist/ClaudeAPISwitch.app/
+dist/ClaudeAPISwitch.app.zip
+
+# Test byproducts
+tests/echo-server.log
+*.pid
+
+# Editor / OS
+.DS_Store
+xcuserdata/
+.claude/settings.local.json

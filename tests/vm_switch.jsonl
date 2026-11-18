@@ -1,0 +1,19 @@
+{"ts":"2026-11-16T07:13:15Z","event":"switch.start","model":"echo-model","to":"lmstudio"}
+{"backup":"","token":"****","ts":"2026-11-16T07:13:16Z","model":"echo-model","to":"lmstudio","base":"http:\/\/127.0.0.1:1234","event":"switch.ok"}
+{"event":"switch.start","model":"echo-model","ts":"2026-11-16T07:13:16Z","to":"strata"}
+{"ts":"2026-11-16T07:13:16Z","token":"vmse…0000","event":"switch.ok","backup":"\/Users\/uhd\/Library\/Application Support\/ClaudeAPISwitch\/backups\/2026-11-15-231316-to-strata.json","base":"http:\/\/127.0.0.1:18500","model":"echo-model","to":"strata"}
+{"model":"","to":"official","event":"switch.start","ts":"2026-11-16T07:13:16Z"}
+{"to":"official","ts":"2026-11-16T07:13:16Z","backup":"\/Users\/uhd\/Library\/Application Support\/ClaudeAPISwitch\/backups\/2026-11-15-231316-to-official.json","event":"switch.ok"}
+{"event":"switch.start","model":"","to":"lmstudio","ts":"2026-11-16T07:13:16Z"}
+{"ts":"2026-11-16T07:13:16Z","event":"switch.fail","error":"settings.json is not valid JSON — refusing to modify","to":"lmstudio"}
+{"event":"app.start","lang":"en","ts":"2026-11-16T07:14:12Z"}
+{"ts":"2026-11-16T07:20:47Z","event":"switch.start","model":"","to":"lmstudio"}
+{"backup":"\/Users\/uhd\/Library\/Application Support\/ClaudeAPISwitch\/backups\/2026-11-15-232047-to-lmstudio.json","event":"switch.ok","base":"http:\/\/127.0.0.1:1234","token":"****","to":"lmstudio","ts":"2026-11-16T07:20:47Z","model":"echo-model"}
+{"ok":true,"message":"Switched → LM Studio (Bionic) · echo-model","ts":"2026-11-16T07:20:47Z","event":"ui.result"}
+{"event":"ui.result","ts":"2026-11-16T07:27:14Z","message":"LM Studio server stopped","ok":true}
+{"event":"ui.result","ts":"2026-11-16T07:30:15Z","message":"lmstudio: not serving","ok":false}
+{"message":"LM Studio server started","ok":true,"ts":"2026-11-16T07:31:02Z","event":"ui.result"}
+{"event":"ui.result","ts":"2026-11-16T07:31:08Z","message":"클립보드 복사: claude --settings \"\/Users\/uhd\/.claude\/profiles\/lmstudio.json\"","ok":true}
+{"event":"autostart","enabled":true,"ts":"2026-11-16T07:32:42Z"}
+{"enabled":false,"ts":"2026-11-16T07:33:37Z","event":"autostart"}
+{"event":"ui.result","ts":"2026-11-16T07:35:58Z","message":"복원 완료: 2026-11-15-232047-to-lmstudio.json","ok":true}
