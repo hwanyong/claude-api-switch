@@ -138,7 +138,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ? [.official, .lmstudio, .strata, .custom] : [.official, .lmstudio, .strata]
         for kind in switchKinds {
             let key: String = kind == .official ? "menu.official"
-                : kind == .lmstudio ? "menu.lmstudio" : "menu.strata"
+                : kind == .lmstudio ? "menu.lmstudio"
+                : kind == .strata ? "menu.strata" : "menu.custom"
             let it = NSMenuItem(title: T(key), action: #selector(doSwitch(_:)), keyEquivalent: "")
             it.target = self
             it.representedObject = kind.rawValue
