@@ -1,149 +1,146 @@
-# 2. 기획 · 설계
+# 2. Design
 
-전제: `01_findings.md`의 실측 결과(두 백엔드 모두 `/v1/messages` 동작, 스위칭 지점 = `~/.claude/settings.json` 의 `env`)
+Premise: the measurements in [01_findings.md](01_findings.md). Both local backends answer
+`POST /v1/messages`, and the switching point is the `env` block of `~/.claude/settings.json`.
 
-## 2.1 목표
+This document records the design as planned on 2026-11-15, and marks where the shipped code
+went a different way. Where the two disagree, the code is right and the note says so.
 
-- 메뉴바(트레이) 상주 앱. 아이콘 하나로 **현재 Claude Code가 어느 API를 쓰는지** 보이게 한다.
-- 우클릭(또는 클릭) 컨텍스트 메뉴에서 **공식 Claude API ↔ LM Studio(Bionic) ↔ Strata** 로 즉시 전환.
-- 전환 실패를 줄이기 위해 포트·키·모델은 **직접 입력 없이 자동 감지**.
-- 언제든 원래대로 되돌릴 수 있다(백업·복원, 재로그인 불필요).
+## 2.1 Goals
 
-비목표(우선): 프록시/캐시/토큰 통계, 창(Windows) 지원, 팀 배포.
+| Goal | Realised as |
+| --- | --- |
+| A menu bar resident app whose icon shows which API Claude Code is on | `NSStatusItem` with the `switch.2` symbol and a coloured state dot |
+| One click between official, LM Studio, Strata | plus a fourth target added later: a user-declared endpoint |
+| No hand-typed ports, keys or model ids for the known backends | `Discovery.swift` probes live: `GET /v1/models` decides serving |
+| Always reversible | 20 backups, a restore submenu, `restore` in the CLI, no keychain change |
 
-## 2.2 핵심 개념: 프로파일
+Non-goals, still true: no proxy, no token accounting across providers, no Windows, no
+multi-user deployment, no Homebrew formula.
 
-전환_UNIT은 "프로파일" = settings.json `env`에 넣을 환경변수 세트.
+## 2.2 The unit of switching: a profile
 
-| 프로파일 | env 내용 |
-|---|---|
-| **공식 API** | 위 4개 키를 **삭제** (키체인 자격증명 사용) |
-| **LM Studio(Bionic)** | `ANTHROPIC_BASE_URL=http://127.0.0.1:<실측포트>`<br>`ANTHROPIC_AUTH_TOKEN=lmstudio`<br>`ANTHROPIC_MODEL=<선택모델>`<br>`CLAUDE_CODE_ATTRIBUTION_HEADER=0` |
-| **Strata** | `ANTHROPIC_BASE_URL=http://127.0.0.1:<실측포트>`<br>`ANTHROPIC_AUTH_TOKEN=<native-instances의 api_key>`<br>`ANTHROPIC_MODEL=<실측모델 id>` |
-| 사용자 커스텀 | 추후 (예: 원격 rig의 LM Link, 다른 Mac mini) |
+A profile is the set of `env` entries written for one backend.
 
-- 다른 env 키(예: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`)와 settings의 나머지 항목은 **건드리지 않는다**(merge-only).
-- `~/.claude/settings.json` 실례(현재) → 전환 후 기대 diff:
+| Profile | Written env |
+| --- | --- |
+| official | the eleven managed keys are removed (the keychain credential is then used) |
+| LM Studio | `ANTHROPIC_BASE_URL=http://127.0.0.1:<measured port>`, `ANTHROPIC_AUTH_TOKEN=lmstudio`, five model keys, `CLAUDE_CODE_ATTRIBUTION_HEADER=0` |
+| Strata | same shape, with `ANTHROPIC_AUTH_TOKEN` from `native-instances/*.json` |
+| custom | the address, key and model id you declared with `custom set` or the menu |
 
-```jsonc
-// before
-"env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }
-// after (Strata)
-"env": {
-  "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-  "ANTHROPIC_BASE_URL": "http://127.0.0.1:18500",
-  "ANTHROPIC_AUTH_TOKEN": "<strata api_key>",
-  "ANTHROPIC_MODEL": "iq3_s"
-}
-```
+Plus the two context keys when a policy was derived: `CLAUDE_CODE_MAX_CONTEXT_TOKENS`, and
+`CLAUDE_CODE_AUTO_COMPACT_WINDOW` only under `--hard`.
 
-## 2.3 UI (메뉴바)
+The merge rule: every other `env` key and every other top-level key is left alone. The
+before/after shape from the original design still holds:
 
-아이콘: 문자/심볼 + 색 배지 (예: 공식=회색, LM Studio=초록, Strata=주황) + 로딩 중 스피너.
+| File position | Before a switch to Strata | After |
+| --- | --- | --- |
+| `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `"1"` | `"1"` (untouched) |
+| `env.ANTHROPIC_BASE_URL` | absent | `http://127.0.0.1:18500` |
+| `env.ANTHROPIC_AUTH_TOKEN` | absent | the instance `api_key` |
+| `env.ANTHROPIC_MODEL` | absent | `iq3_s` |
+| top-level `hooks`, `model`, `permissions` | present | present |
 
-메뉴 구성(한국어):
+## 2.3 Architecture as shipped
 
-```
-현재: Strata · iq3_s · 131k 컨텍스트        ● (자동감지)
-────────────────────────────────
-공식 Claude API로 전환
-LM Studio (Bionic)로 전환
-Strata로 전환
-────────────────────────────────
-모델 ▸   (GET /v1/models 실시간: iq3_s, qwen/qwen3.8-27b, …)
-서버 ▸   LM Studio 서버 시작/중지 · Strata 상태 확인
-────────────────────────────────
-지금 상태 점검            (헬스체크: /v1/models + 최소 /v1/messages)
-새 세션부터 적용됩니다 — 안내
-settings.json 열기
-백업 복원 ▸ (최근 5회)
-로그 열기
-────────────────────────────────
-설정…  ·  종료
-```
+Eleven Swift files, no third-party dependency, one SPM executable target.
 
-핵심 UX 원칙
-- 전환 후 토스트: "적용 완료. **새로 실행하는 claude 세션**부터 적용됩니다."
-- 서버가 꺼져 있으면 전환 실패 대신 "서버 시작" 1단계 자동 실행 → 실패 시 원인 표시(port 불일치/미설치).
-- 시크릿은 메뉴/로그에 마스킹(`50a2…ec0e`).
+| Module | File | Responsibility |
+| --- | --- | --- |
+| entry point | `main.swift` | no arguments: run the AppKit app; any argument: run the CLI and exit with its code |
+| status item and menu | `UIApp.swift` | `NSStatusItem`, menu rebuild, the custom endpoint dialog, toggles, autostart through `SMAppService` |
+| CLI | `CLI.swift` | twelve subcommands, `--json` output for the machine-readable ones |
+| engine | `Engine.swift` | `gatherStatus`, `switchTo`, `policyFor`, `writeProfileFile`, `checkBackend` |
+| discovery | `Discovery.swift` | Strata instance JSON, LM Studio port probing and `lms` control, declared endpoint probing |
+| HTTP | `HTTPKit.swift` | `GET /v1/models` with three auth styles, `POST /v1/messages` probe, `meta.n_ctx` parsing |
+| settings editing | `SettingsEditor.swift` | `flock`, merge-only write, backup, atomic replace, read-back verify, rollback, restore |
+| policy | `Policy.swift` | engine log parsing into `Residency`, `derivePolicy`, warning set, what to publish |
+| watch | `Watch.swift` | status line, live session records, transcript tail scan |
+| persistence | `Store.swift` | app config: selected model per backend, policy overrides, the declared endpoint, language |
+| shared | `Core.swift` | managed key list, paths, atomic `jsonWrite`, process helpers, masking, the string table |
 
-## 2.4 아키텍처
+Drift from the 2026-11-15 plan, which proposed `SwiftUI MenuBarExtra`: the shipped app uses
+AppKit `NSStatusItem` with an `NSMenu` built in code. The menu needs disabled informational
+rows, attributed titles for state suffixes, and per-item represented objects; that is cheaper
+in `NSMenu` than in `MenuBarExtra`. `main.swift` sets `setActivationPolicy(.accessory)`.
 
-```
-MenuBarApp (SwiftUI MenuBarExtra)
-   └─ SwitchEngine (핵심 로직, CLI로도 재사용)
-        ├─ BackendDiscovery   LM Studio: lms server status + 포트 프로빙(설정값 불신)
-        │                     Strata: ~/.strata/data/native-instances/*.json → host/port/api_key/model
-        ├─ ModelCatalog       GET /v1/models (+ n_ctx 노출)
-        ├─ HealthCheck        /v1/models, 최소 /v1/messages 왕복
-        ├─ SettingsEditor     settings.json read→merge→validate→백업→원자적 교체→재검증
-        ├─ ProfileStore       앱 설정(프로파일/모델 우선순위) → ~/Library/Application Support/…(로컬 디스크)
-        └─ AuditLog           전환 기록(누가/언제/무엇→무엇, 이전 백업 경로)
-```
+## 2.4 Writing settings.json (as built)
 
-설정 쓰기 안전 절차 (중요 — Claude Code도 같은 파일을 쓴다)
-1. `~/.claude/settings.json` 읽기 → JSON 파싱 실패 시 **중단**(파일에 손대지 않음)
-2. 백업: `~/.claude/backups/switch-<timestamp>.settings.json` (최근 5개 유지)
-3. `env`의 4개 관리 키만 추가/갱신/삭제, 그 외 바이트 단위 보존을 위해 JSON 재직렬화 대신 **키 단위 편집** 권장
-4. tmp에 쓰고 `rename`으로 교체(같은 파일시스템 = 로컬 home이므로 가능)
-5. 재읽어 기대값 확인 → 실패 시 자동 롤백 + 로그
+Claude Code edits the same file, so the write path is `SettingsEditor.apply(set:remove:tag:)`:
 
-주의: 이 프로젝트 폴더 `~/LOCAL/...` 은 **SMB 마운트**(rename 미지원, 한글 파일명 NFD 분해). 앱 설정·백업은 로컬(`~/Library`)에 두고, 소스코드는 로컬 디스크에서 빌드 권장.
+| Step | Code |
+| --- | --- |
+| 1 | `open(~/.claude/.ccswitch.lock)` then `flock(LOCK_EX)` |
+| 2 | `readDoc()`: an empty file is treated as `{}`, a file that fails to parse throws and nothing is written |
+| 3 | change only the `env` dictionary entries named by `set` and `remove` |
+| 4 | recheck the file's mtime; if it moved, sleep 0.3 s and retry, up to 3 attempts |
+| 5 | copy the current file to `~/Library/Application Support/ClaudeAPISwitch/backups/<timestamp>-<tag>.json`, keeping the 20 newest |
+| 6 | `jsonWrite`: write `<path>.ccswitch.tmp` in the same directory, set the POSIX mode on the temp file, `fsync`, then `rename(2)` |
+| 7 | re-read and check every key that must be present and every key that must be gone; on mismatch copy the backup over the file and throw |
 
-## 2.5 기술 스택
+Two drift notes:
 
-- **권장: Swift + SwiftUI `MenuBarExtra`** (macOS 13+). 의존성 없음, 메모리 ~20MB, 상주용 최적. `swift build`(SPM) 또는 Xcode 프로젝트.
-- 대안 A: Python + `rumps` → 개발 속도 빠름, 상주비용 큼(인터프리터)·packaging 번거로움.
-- 대안 B: Electron/Tauri → 트레이+메뉴는 가능하나 이 용도엔 과중.
+| Planned | Shipped | Why |
+| --- | --- | --- |
+| Backups in `~/.claude/backups`, five kept | `~/Library/Application Support/ClaudeAPISwitch/backups`, 20 kept | the app's own directory survives a Claude Code reset, and five was too few to walk back a bad afternoon |
+| Key-by-key textual edit to preserve byte order | JSON round trip with `.sortedKeys`, `env` merged | simpler and provably merge-only at the key level. Key order in `settings.json` can change; contents cannot. This is a real, disclosed difference |
+| Menu text: "최근 5회" | the restore submenu lists the 10 newest | one line of code, more history in reach |
 
-## 2.6 개발 단계 (MVP 먼저, 각 단계 끝에서 실사용 검증)
+## 2.5 Session-scoped launching
 
-| 단계 | 산출물 | 완료 기준 |
-|---|---|---|
-| P0 검증 CLI | `switch-profile <official\|lmstudio\|strata>` (Swift 또는 Python) | 실제 `claude` 새 세션이 Strata/LM Studio `/v1/messages`로 응답, 공식 복귀 확인 |
-| P1 메뉴바 MVP | 아이콘 + 3개 전환 + 상태 표시 + 헬스체크 | 우클릭 메뉴로 3방향 전환, 앱 재시작 후 상태 유지 |
-| P2 실사용 보강 | 모델 선택, 서버 시작/중지, 백업 복원, 로그, 한국어/영어 로케일, 로그인 시 자동시작 | 서버 꺼진 상태에서도 전환 성공률 100% (자동 기동) |
-| P3 배포·견고화 | 여러 Strata 인스턴스·LM Link(원격) 프로파일, ad-hoc 서명, 설치 스크립트 | 재부팅 후에도 정상 동작 |
+`claude --settings <file>` was confirmed in `claude --help` on 2026-11-15.
 
-## 2.7 테스트/수락 기준
+- The app writes `~/.claude/profiles/<kind>.json`, a complete settings file for that session.
+- The menu copies the command (`Copy new-session command`), and the CLI prints it.
+- Global switching and session scope stay independent: global can stay official while one
+  terminal runs the local model.
+- The profile carries the endpoint key, so it is written `0600`.
+- `claude --settings` replaces rather than merges the `env` block for that session; the file is
+  therefore self-contained.
 
-1. 공식→Strata: `claude -p "hi"`가 Strata 로그에 잡히고 응답, Strata 종료 시 명확한 오류.
-2. Strata→LM Studio: 다른 모델로 전환 후 응답, `n_ctx` 부족 경고 노출.
-3. →공식 복귀: env 4키 삭제, 로그인 그대로 유지(`Claude Safe Storage`健재), 동작 확인.
-4. 동시성: 전환 직전 Claude Code가 settings.json을 수정해도 사용자 설정(`hooks`, `permissions`) 보존.
-5. 파싱 실패/권한 오류 시 파일 원본 그대로 + 오류 메시지.
+## 2.6 The context policy (added after the switcher worked)
 
-## 2.8 위험과 대응
+Inputs, all measured, none configured: `Residency` from the engine log, `meta.n_ctx` from the
+endpoint, `autoCompactWindow` and `autoCompactEnabled` from the user's `settings.json`, and the
+user's overrides in `Store.BackendPolicy`.
 
-| 위험 | 대응 |
-|---|---|
-| settings.json 동시 수정 유실 | 잠금(flock) + 백업 + 원자적 교체 + 롤백 |
-| LM Studio 포트 설정≠실제(8234 vs 1234) | `lms server status`+포트 프로빙, 설정값은 참고만 |
-| Strata 인스턴스/포트 변경 | json 재파싱, 다중 인스턴스 시 선택 UI |
-| `ANTHROPIC_API_KEY` 잔존으로 우선순위 충돌 | 전환 시 해당 키도 env에서 정리 |
-| 세션에 이미 반영된 env | 메뉴에 "새 세션부터 적용" 명시, 필요 시 "새 터미널 열기" 보조 |
-| 앱이 자기 자신을 전환(Strata로 실행 중인 도구) | 앱은 Claude API를 쓰지 않으므로 무관 — 문서에 명시 |
+`derivePolicy` publishes `min(coldPrefillSeconds × tok/s, resident budget ÷ sessions,
+n_ctx − 8000)`, rounded down to a 4000 grid, floored at 32000, never above `n_ctx`, never
+replacing a tighter user window. It publishes nothing when `autoCompactEnabled` is false or when
+`--window auto` was asked for, and it says which in `windowReason`.
 
-## 2.9 확정 결정 (2026-11-15 사용자 선택)
+The surface: `policy` in the CLI, the Context submenu, the `autoCompactWindow` in a session
+profile, the two env keys in a global switch, and `statusline` for the in-session warning.
+The full derivation and the honest-refusal table are in the README; the numbers behind them are
+in [01_findings.md](01_findings.md) section 6.
 
-1. **스택: Swift + SwiftUI `MenuBarExtra`** (macOS 13+, SPM 빌드)
-2. **적용 범위: 전역 `settings.json` + 세션형 런처 둘 다**
-3. **서버 자동 기동 + 수동 토글 둘 다**
-4. **모델: `/v1/models` 감지 목록에서 선택** (컨텍스트 길이 표시)
+## 2.7 Stages, and what happened
 
-## 2.10 세션형 런처 상세
+| Stage | Deliverable | Result |
+| --- | --- | --- |
+| P0 | CLI engine only | done first, verified against a real local server before any UI existed (see `TESTING.md` section A) |
+| P1 | menu bar: icon, switching, status, health check | done |
+| P2 | model choice, server start/stop, backup restore, log, Korean and English strings, login item | done; the hardcoded strings were moved into `STRINGS` on 2026-11-18 |
+| P3 | ad-hoc signing, install script, resilience | done, plus CI builds (2026-11-18) |
+| P4, unplanned | user-declared endpoint, the context policy work | added 2026-11-18 as part of preparing this repository for publication |
 
-`claude --settings <file|json>` 플래그 존재 확인됨(도움말 실측). 동작:
+## 2.8 Decisions
 
-- 앱이 프로파일별 파일 생성: `~/.claude/profiles/<profile>.settings.json`
-  (전역 settings와 같은 env 세트가 그 파일 안에만 존재)
-- 메뉴 항목 "이 프로파일로 새 Claude 세션 실행"
-  - 기본: 명령어 클립보드 복사 → `claude --settings ~/.claude/profiles/strata.settings.json`
-  - 보조: 설정에서 고르면 터미널(Doghoodie 등) 탭으로 바로 실행
-- 전역 전환과 독립 → "전역=공식, 이 세션=Strata" 병행 가능
+| Date | Decision |
+| --- | --- |
+| 2026-11-15 | Swift, SPM, macOS 13+. Global `settings.json` and session profiles both. Server auto-start and manual toggle both. Model chosen from the detected `/v1/models` list |
+| 2026-11-18 | Publish under MIT. Add the custom endpoint rather than publish a switcher that only knows two private products. Ship the `.app` through GitHub Actions instead of committing a binary. Keep the bundle identifier `com.uhd.claudeapiswitch` |
 
-## 2.11 다음 할 일 (P0)
+## 2.9 Risks and their handling
 
-1. Swift SPM 골격 + `SwitchEngine` CLI (`switch-profile official|lmstudio|strata`, `--list`, `--status`)
-2. P0 실측 시나리오 3종 (2.7의 1~3번) 통과 확인
-3. 통과 후 P1 메뉴바 UI 착수
+| Risk | Handling |
+| --- | --- |
+| Concurrent writes to `settings.json` lose someone's change | lock, mtime recheck, backup, atomic replace, verify, rollback |
+| A stored port differs from the listening port | probe live, treat the stored value as a hint |
+| `ANTHROPIC_API_KEY` left behind wins precedence | remove-only management of that key on every switch |
+| The new environment reaches only new processes | stated in the menu header and in the switch result |
+| A local engine's log format is private | parse only what is there, warn when a number is missing, never estimate a number |
+| The app is itself running while pointed at a local engine | the app makes no Claude API calls of its own, so switching cannot break the app |
+| Detection formats change with an app update | documented in "Known limitations"; a format change produces an explicit "not detected", not a wrong endpoint |

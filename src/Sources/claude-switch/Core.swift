@@ -274,8 +274,8 @@ let STRINGS: [String: (String, String)] = [
     "policy.evicted": ("conversations evicted since last check:", "최근 확인 후 대화 추방:"),
     "policy.coldre": ("cold re-read each", "매번 콜드 재읽기"),
     "policy.cache-full": ("parked conversations at the slot limit", "파킹 대화가 슬롯 한계"),
-    "policy.compactoff": ("autoCompactEnabled=false: nothing bounds the session — it grows until prompt-too-long",
-                          "autoCompactEnabled=false: 세션을 막는 장치가 없음 — prompt-too-long까지 성장"),
+    "policy.compactoff": ("autoCompactEnabled=false: nothing bounds the session, it grows until prompt-too-long",
+                          "autoCompactEnabled=false: 세션을 막는 장치가 없음, prompt-too-long까지 성장"),
     "policy.override": ("profile overrides settings.json autoCompactWindow:", "프로파일이 settings.json의 autoCompactWindow를 덮어씀:"),
     "policy.yourwindow": ("settings.json window", "settings.json 창"),
     "ui.none": ("(none)", "(없음)"),
@@ -288,7 +288,7 @@ let STRINGS: [String: (String, String)] = [
     "dialog.token": ("API key, optional:", "API 키 (선택):"),
     "dialog.model": ("Model id, optional:", "모델 id (선택):"),
     "cli.usage": ("""
-    claude-switch — Claude Code API switch (menu bar app, CLI mode)
+    claude-switch: Claude Code API switch (menu bar app, CLI mode)
 
       status [--json]                  current backend + detection
       list                             supported backends
@@ -306,7 +306,7 @@ let STRINGS: [String: (String, String)] = [
       backups                          backup list
       restore <file|latest>            restore a backup
     """, """
-    claude-switch — Claude Code API 스위치 (메뉴바 앱 CLI 모드)
+    claude-switch: Claude Code API 스위치 (메뉴바 앱 CLI 모드)
 
       status [--json]                  현재 백엔드 + 감지 결과
       list                             지원 백엔드

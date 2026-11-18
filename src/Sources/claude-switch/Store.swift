@@ -17,7 +17,7 @@ struct BackendPolicy: Codable {
 /// typed in by hand. Detection is still live (GET /v1/models decides "serving").
 struct CustomEndpoint: Codable {
     var title: String?         // menu label, defaults to the host
-    var base: String           // "http://127.0.0.1:8080" — no trailing /v1
+    var base: String           // "http://127.0.0.1:8080", with no trailing /v1
     var token: String?         // x-api-key / Bearer value
     var model: String?         // preferred model id; nil = whatever /v1/models lists first
 }

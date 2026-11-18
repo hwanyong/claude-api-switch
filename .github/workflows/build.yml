@@ -1,0 +1,57 @@
+name: build
+
+# Every push and pull request compiles the app and runs the CLI's read-only path.
+# A push of a v* tag additionally publishes dist/ClaudeAPISwitch.app.zip as a Release.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-14
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build the .app bundle (release configuration, ad-hoc signed)
+        run: zsh dist/build_app.sh
+        env:
+          CCSWITCH_VERSION: ${{ github.ref_name }}
+
+      # The bundle is checked, not just built: `status` and `list` are the read-only
+      # half of the CLI, and they fail if the binary cannot start or cannot find
+      # Package.swift's product. Nothing here writes to ~/.claude.
+      - name: Smoke test the binary inside the bundle
+        run: |
+          BIN=dist/ClaudeAPISwitch.app/Contents/MacOS/claude-switch
+          "$BIN" list
+          "$BIN" status --json | head -40
+          "$BIN" nosuchcommand; test $? -eq 2
+          codesign -dv dist/ClaudeAPISwitch.app 2>&1 | head -5
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClaudeAPISwitch-${{ github.ref_name }}
+          path: dist/ClaudeAPISwitch.app.zip
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ClaudeAPISwitch-${{ github.ref_name }}
+      - name: Publish the zip on the Release
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes ClaudeAPISwitch.app.zip
+        env:
+          GH_TOKEN: ${{ github.token }}

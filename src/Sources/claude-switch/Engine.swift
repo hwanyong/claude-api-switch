@@ -202,7 +202,7 @@ func switchTo(_ kind: BackendKind, model: String? = nil, autoStart: Bool = true)
 
 // MARK: - session launcher profile file
 
-/// Writes ~/.claude/profiles/<kind>.json — a full Claude Code settings file:
+/// Writes ~/.claude/profiles/<kind>.json, a full Claude Code settings file:
 /// env block + the context policy (autoCompactWindow / window env) + the resident
 /// token status line. Returns (path, command, policy).
 func writeProfileFile(kind: BackendKind, model: String?,
@@ -251,7 +251,7 @@ func checkBackend(_ kind: BackendKind) -> SwitchResult {
     guard let b = backendFor(kind), b.serving, let base = b.base else {
         return SwitchResult(ok: false, message: "\(kind.rawValue): not serving")
     }
-    // Probe up to 4 models (selected first) — some entries are non-chat models
+    // Probe up to 4 models (selected first). Some entries are non-chat models
     // (audio/embedding) that hang or 400 on /v1/messages.
     let cfg = Store.load()
     var tried: [String] = []

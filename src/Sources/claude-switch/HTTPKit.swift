@@ -98,5 +98,5 @@ func probeMessages(base: String, token: String?, model: String?, timeout: TimeIn
     let r = httpRequest(url, method: "POST", headers: headers, body: data, timeout: timeout)
     if r.status == 200 { return (true, 200, nil) }
     let msg = String(data: r.data.prefix(300), encoding: .utf8) ?? ""
-    return (false, r.status, (r.error ?? "http \(r.status)") + (msg.isEmpty ? "" : " — \(msg)"))
+    return (false, r.status, (r.error ?? "http \(r.status)") + (msg.isEmpty ? "" : ": \(msg)"))
 }

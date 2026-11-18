@@ -208,7 +208,7 @@ func derivePolicy(kind: BackendKind, model: String?, modelWindow: Int?,
         return p
     }
     if !autoCompactEnabled {
-        // Nothing bounds the session at all — publishing a window would be a lie.
+        // Nothing bounds the session at all, so publishing a window would be a lie.
         p.windowReason = "autoCompactEnabled=false in settings.json"
         buildWarnings(&p)
         return p

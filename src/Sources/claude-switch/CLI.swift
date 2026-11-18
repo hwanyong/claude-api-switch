@@ -88,10 +88,11 @@ func cliMain(_ args: [String]) -> Int32 {
             return 0
         case "show":
             guard let c = Store.load().custom, !c.base.isEmpty else { print("no custom endpoint"); return 1 }
-            print("title: \(c.title ?? "")")
+            // Empty fields are skipped: the menu label and the model are optional.
+            if let t = c.title, !t.isEmpty { print("title: \(t)") }
             print("base: \(c.base)")
             print("token: " + (c.token.map { maskSecret($0) } ?? ""))
-            print("model: \(c.model ?? "")")
+            if let m = c.model, !m.isEmpty { print("model: \(m)") }
             return 0
         case "clear":
             var cfg = Store.load()

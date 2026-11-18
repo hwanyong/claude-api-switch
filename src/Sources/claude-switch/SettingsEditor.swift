@@ -34,7 +34,7 @@ final class SettingsEditor {
             .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true { return [:] }
         guard let obj = try? JSONSerialization.jsonObject(with: data),
               let doc = obj as? [String: Any] else {
-            throw SettingsFailure(message: "settings.json is not valid JSON — refusing to modify")
+            throw SettingsFailure(message: "settings.json is not valid JSON: refusing to modify")
         }
         return doc
     }

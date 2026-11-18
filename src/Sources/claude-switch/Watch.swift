@@ -176,7 +176,7 @@ func statuslineMain() -> Int32 {
     if let b = budget, b > 0 {
         let pct = Int(Double(used) / Double(b) * 100)
         if used >= b {
-            parts.append("⛔ resident " + String(pct) + "% — /compact now")
+            parts.append("⛔ resident " + String(pct) + "% of budget: /compact now")
         } else if used >= b * 8 / 10 {
             parts.append("⚠ resident " + String(pct) + "% of " + fmtTokens(b))
         }

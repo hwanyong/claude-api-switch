@@ -4,6 +4,8 @@ set -e
 # $0 may be relative: resolve the two directories once, before any cd.
 DIST="${0:A:h}"
 SRC="$DIST/../src"
+# CI stamps the git tag into the bundle; a local build keeps 0.1.0.
+VERSION="${CCSWITCH_VERSION:-0.1.0}"
 cd "$SRC"
 swift build -c release
 APP="$DIST/ClaudeAPISwitch.app"
@@ -11,7 +13,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp .build/release/claude-switch "$APP/Contents/MacOS/claude-switch"
 xattr -cs "$APP" 2>/dev/null || true   # codesign refuses bundles with Finder detritus
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -19,11 +21,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>claude-switch</string>
   <key>CFBundleIdentifier</key><string>com.uhd.claudeapiswitch</string>
   <key>CFBundleName</key><string>ClaudeAPISwitch</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+  <key>CFBundleVersion</key><string>${VERSION}</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSUIElement</key><true/>
-  <key>NSHumanReadableCopyright</key><string>local utility</string>
+  <key>NSHumanReadableCopyright</key><string>Copyright (c) 2026 hwanyong, MIT license</string>
 </dict>
 </plist>
 PLIST
