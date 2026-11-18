@@ -110,9 +110,26 @@ func strataResidency(logPath: String, maxContext: Int?) -> Residency? {
 
 enum WarnLevel { case info, caution, danger }
 
-/// Backends that run on this machine, where the KV cache decides what a session
-/// may hold. The official API does not.
-func isLocalKind(_ k: BackendKind) -> Bool { k == .strata || k == .lmstudio }
+/// Loopback check on the endpoint's own host: the KV-cache budget belongs to an
+/// engine running on this machine. A declared endpoint on another host has no
+/// local KV limit we can read, so it gets no budget warning.
+func isLoopbackBase(_ base: String?) -> Bool {
+    guard let host = base.flatMap({ URL(string: $0)?.host }) else { return false }
+    if host == "localhost" || host == "::1" { return true }
+    let parts = host.split(separator: ".")
+    guard parts.count == 4, parts.allSatisfy({ Int($0) != nil }) else { return false }
+    return parts[0] == "127"
+}
+
+/// Backends where the KV cache decides what a session may hold. The official API
+/// does not; a declared endpoint only does when it is served on this machine.
+func isLocalKind(_ k: BackendKind, base: String? = nil) -> Bool {
+    switch k {
+    case .strata, .lmstudio: return true
+    case .custom: return isLoopbackBase(base)
+    default: return false
+    }
+}
 
 func kindTitle(_ k: BackendKind) -> String {
     switch k {
@@ -131,6 +148,7 @@ struct PolicyWarning {
 struct ContextPolicy {
     var kind: BackendKind
     var model: String?
+    var base: String?          // endpoint this policy was derived for
     var modelWindow: Int?
     var compactWindow: Int?
     var windowReason: String
@@ -142,7 +160,7 @@ struct ContextPolicy {
     var resident: Residency?
     var warnings: [PolicyWarning] = []
 
-    var isLocal: Bool { isLocalKind(kind) }
+    var isLocal: Bool { isLocalKind(kind, base: base) }
     var perSessionBudget: Int? {
         guard let b = resident?.budgetTokens else { return nil }
         return b / max(1, sessions)
@@ -156,11 +174,11 @@ let WINDOW_ROUND: Int = 4_000
 
 /// Derive the policy for one backend+model. `ov` carries the user's overrides.
 func derivePolicy(kind: BackendKind, model: String?, modelWindow: Int?,
-                  residency: Residency?, ov: BackendPolicy,
+                  residency: Residency?, ov: BackendPolicy, base: String? = nil,
                   userWindow: Int? = nil, autoCompactEnabled: Bool = true) -> ContextPolicy {
     let sessions = max(1, ov.sessions ?? DEFAULT_SESSIONS)
     let waitS = max(0, ov.coldPrefillSeconds ?? DEFAULT_COLD_PREFILL_S)
-    var p = ContextPolicy(kind: kind, model: model, modelWindow: modelWindow,
+    var p = ContextPolicy(kind: kind, model: model, base: base, modelWindow: modelWindow,
                           compactWindow: nil, windowReason: "auto",
                           sessions: sessions, coldPrefillSeconds: waitS, hard: ov.hard ?? false,
                           userWindow: userWindow, autoCompactEnabled: autoCompactEnabled,
@@ -169,7 +187,7 @@ func derivePolicy(kind: BackendKind, model: String?, modelWindow: Int?,
     var why: [String] = []
 
     if let w = ov.compactWindow { wants.append(w); why.append("user") }
-    if isLocalKind(kind), !(ov.autoWindow ?? false) {
+    if p.isLocal, !(ov.autoWindow ?? false) {
         if let tps = residency?.prefillTps, waitS > 0 {
             wants.append(Int(tps * Double(waitS)))
             why.append("cold re-read \(waitS)s @ \(Int(tps)) tok/s")

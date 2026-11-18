@@ -13,11 +13,21 @@ struct BackendPolicy: Codable {
     var watchMenu: Bool?           // show live token load in the menu bar
 }
 
+/// A user-declared Anthropic-compatible endpoint: the address, key and model id
+/// typed in by hand. Detection is still live (GET /v1/models decides "serving").
+struct CustomEndpoint: Codable {
+    var title: String?         // menu label, defaults to the host
+    var base: String           // "http://127.0.0.1:8080" — no trailing /v1
+    var token: String?         // x-api-key / Bearer value
+    var model: String?         // preferred model id; nil = whatever /v1/models lists first
+}
+
 struct StoreConfig: Codable {
     var modelFor: [String: String]?   // backend kind -> selected model id
     var lmstudioToken: String?
     var language: String?             // "ko" | "en" | nil(auto)
     var policyFor: [String: BackendPolicy]?   // backend kind -> context policy
+    var custom: CustomEndpoint?               // the one declared endpoint
 }
 
 enum Store {

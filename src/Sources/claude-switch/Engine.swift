@@ -25,7 +25,8 @@ func gatherStatus() -> StatusInfo {
         official.notes.append("keychain credential not found (login may be required)")
     }
 
-    st.backends = [official, lm, str]
+    let cus = discoverCustom(cfg: cfg)
+    st.backends = [official, lm, str, cus]
 
     if let base = env[ENV_BASE] {
         if let sb = str.base, base == sb {
@@ -65,6 +66,7 @@ func backendFor(_ kind: BackendKind) -> Backend? {
     switch kind {
     case .lmstudio: return discoverLMStudio(cfg: cfg)
     case .strata:   return discoverStrata()
+    case .custom:   return discoverCustom(cfg: cfg)
     default:        return nil
     }
 }
@@ -123,7 +125,7 @@ func policyFor(_ kind: BackendKind, model: String? = nil) -> ContextPolicy {
     let res = (kind == .strata) ? Watch.residency() : nil
     let uc = userCompact(model: sel)
     return derivePolicy(kind: kind, model: sel, modelWindow: modelWindow(b, sel),
-                        residency: res, ov: ov, userWindow: uc.window,
+                        residency: res, ov: ov, base: b.base, userWindow: uc.window,
                         autoCompactEnabled: uc.enabled)
 }
 
@@ -149,9 +151,10 @@ func switchTo(_ kind: BackendKind, model: String? = nil, autoStart: Bool = true)
             return SwitchResult(ok: false, message: "\(error)")
         }
 
-    case .lmstudio, .strata:
+    case .lmstudio, .strata, .custom:
         var b = backendFor(kind) ?? Backend(kind: kind, title: "?")
-        if !b.serving && autoStart {
+        // A declared endpoint has nothing we can start: the user starts that server.
+        if !b.serving && autoStart, kind != .custom {
             if kind == .lmstudio {
                 if startLMStudioServer() { b = discoverLMStudio(cfg: cfg) }
             } else {
@@ -159,7 +162,9 @@ func switchTo(_ kind: BackendKind, model: String? = nil, autoStart: Bool = true)
             }
         }
         guard b.serving, let base = b.base else {
-            let msg = (kind == .lmstudio) ? T("note.lm.startfail") : T("note.strata.down")
+            var msg = T("note.custom.down")
+            if kind == .lmstudio { msg = T("note.lm.startfail") }
+            else if kind == .strata { msg = T("note.strata.down") }
             logEvent("switch.fail", ["to": kind.rawValue, "error": msg])
             return SwitchResult(ok: false, message: msg)
         }
@@ -202,7 +207,7 @@ func switchTo(_ kind: BackendKind, model: String? = nil, autoStart: Bool = true)
 /// token status line. Returns (path, command, policy).
 func writeProfileFile(kind: BackendKind, model: String?,
                       statusLine: Bool? = nil) -> (path: String, command: String, policy: ContextPolicy)? {
-    guard kind == .lmstudio || kind == .strata else { return nil }
+    guard kind == .lmstudio || kind == .strata || kind == .custom else { return nil }
     let cfg = Store.load()
     guard let b = backendFor(kind), b.serving, let base = b.base else { return nil }
     let sel = model ?? cfg.modelFor?[kind.rawValue] ?? b.model
@@ -230,7 +235,8 @@ func writeProfileFile(kind: BackendKind, model: String?,
 
     ensureDir(Paths.profiles)
     let path = Paths.profiles + "/" + kind.rawValue + ".json"
-    guard jsonWrite(path, doc) else { return nil }
+    // The profile holds the endpoint key: owner-only from the first byte.
+    guard jsonWrite(path, doc, fileMode: 0o600) else { return nil }
     logEvent("profile.write", ["kind": kind.rawValue, "model": sel ?? "",
                                "compact_window": pol.compactWindow ?? 0,
                                "model_window": pol.modelWindow ?? 0,

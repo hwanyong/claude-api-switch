@@ -87,9 +87,11 @@ func jsonRead(_ path: String) -> Any? {
     return try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
 }
 
-/// Atomic write: tmp in the same directory, fsync, rename.
+/// Atomic write: tmp in the same directory, mode set on the tmp, fsync, rename.
+/// The mode goes on the tmp file because rename carries it over: a file that holds
+/// an API key is never briefly readable by the rest of the account.
 @discardableResult
-func jsonWrite(_ path: String, _ obj: Any) -> Bool {
+func jsonWrite(_ path: String, _ obj: Any, fileMode: Int = 0o644) -> Bool {
     let dir = (path as NSString).deletingLastPathComponent
     ensureDir(dir)
     let opts: JSONSerialization.WritingOptions = [.prettyPrinted, .withoutEscapingSlashes, .sortedKeys]
@@ -97,6 +99,7 @@ func jsonWrite(_ path: String, _ obj: Any) -> Bool {
     let tmp = path + ".ccswitch.tmp"
     do {
         try data.write(to: URL(fileURLWithPath: tmp))
+        try? FileManager.default.setAttributes([.posixPermissions: fileMode], ofItemAtPath: tmp)
         if let fh = FileHandle(forWritingAtPath: tmp) { try? fh.synchronize(); try? fh.close() }
         // POSIX rename: atomic within the same directory, works if dest exists or not.
         if rename(tmp, path) != 0 {
@@ -229,6 +232,9 @@ let STRINGS: [String: (String, String)] = [
     "menu.official": ("Official Claude API", "공식 Claude API"),
     "menu.lmstudio": ("LM Studio (Bionic)", "LM Studio (Bionic)"),
     "menu.strata": ("Strata", "Strata"),
+    "menu.custom": ("Custom endpoint", "커스텀 엔드포인트"),
+    "menu.custom.set": ("Set custom endpoint…", "커스텀 엔드포인트 설정…"),
+    "menu.custom.clear": ("Remove custom endpoint", "커스텀 엔드포인트 삭제"),
     "menu.models": ("Model", "모델"),
     "menu.server": ("Server", "서버"),
     "menu.lm.start": ("Start LM Studio server", "LM Studio 서버 시작"),
@@ -248,6 +254,8 @@ let STRINGS: [String: (String, String)] = [
     "note.strata.down": ("Strata is not serving. Start the app and load a model.",
                          "Strata가 서빙 중이 아닙니다. 앱을 실행하고 모델을 불러오세요."),
     "note.lm.startfail": ("Could not start LM Studio server.", "LM Studio 서버를 시작하지 못했습니다."),
+    "note.custom.down": ("Custom endpoint does not answer GET /v1/models.",
+                         "커스텀 엔드포인트가 GET /v1/models 에 응답하지 않습니다."),
     "menu.context": ("Context / compaction", "컨텍스트 · 컴팩션"),
     "menu.ctx.statusline": ("Resident token warning in session", "세션 내 상주 토큰 경고"),
     "menu.ctx.watch": ("Token load in menu bar", "메뉴바에 토큰 부하 표시"),
@@ -270,4 +278,50 @@ let STRINGS: [String: (String, String)] = [
                           "autoCompactEnabled=false: 세션을 막는 장치가 없음 — prompt-too-long까지 성장"),
     "policy.override": ("profile overrides settings.json autoCompactWindow:", "프로파일이 settings.json의 autoCompactWindow를 덮어씀:"),
     "policy.yourwindow": ("settings.json window", "settings.json 창"),
+    "ui.none": ("(none)", "(없음)"),
+    "ui.ok": ("OK", "확인"),
+    "ui.cancel": ("Cancel", "취소"),
+    "ui.clipboard": ("Copied to clipboard:", "클립보드 복사:"),
+    "ui.restored": ("Restored:", "복원 완료:"),
+    "ui.autostart.bundleOnly": ("supported only from a .app bundle", ".app 번들에서만 지원"),
+    "dialog.base": ("Endpoint base URL (no /v1 suffix):", "엔드포인트 주소 (/v1 접미사 없이):"),
+    "dialog.token": ("API key, optional:", "API 키 (선택):"),
+    "dialog.model": ("Model id, optional:", "모델 id (선택):"),
+    "cli.usage": ("""
+    claude-switch — Claude Code API switch (menu bar app, CLI mode)
+
+      status [--json]                  current backend + detection
+      list                             supported backends
+      switch <kind> [--model id]       global switch (official|lmstudio|strata|custom)
+      custom set --base URL [--token K] [--model id] [--title NAME]
+                                       declare one Anthropic-compatible endpoint
+      custom show | custom clear       print / remove the declared endpoint
+      models <kind>                    detected models (n_ctx included)
+      check <kind>                     POST /v1/messages round trip
+      profile <kind> [--model id]      write a session profile + print its command
+      policy [kind] [flags] [--json]   auto-compact window / resident budget
+                                       (--window 120k|auto, --sessions N, --wait S, --hard/--soft)
+      watch [--minutes N] [--json]     per-session context token load
+      statusline                       (claude statusLine hook: stdin JSON -> one line)
+      backups                          backup list
+      restore <file|latest>            restore a backup
+    """, """
+    claude-switch — Claude Code API 스위치 (메뉴바 앱 CLI 모드)
+
+      status [--json]                  현재 백엔드 + 감지 결과
+      list                             지원 백엔드
+      switch <kind> [--model id]       전역 전환 (official|lmstudio|strata|custom)
+      custom set --base URL [--token K] [--model id] [--title NAME]
+                                       Anthropic 호환 엔드포인트 하나 선언
+      custom show | custom clear       선언된 엔드포인트 출력 / 삭제
+      models <kind>                    감지된 모델 목록 (n_ctx 포함)
+      check <kind>                     POST /v1/messages 왕복 확인
+      profile <kind> [--model id]      세션 프로파일 생성 + 명령 출력
+      policy [kind] [flags] [--json]   auto-compact 창/상주 예산
+                                       (--window 120k|auto, --sessions N, --wait S, --hard/--soft)
+      watch [--minutes N] [--json]     세션별 컨텍스트 토큰 부하
+      statusline                       (claude statusLine 훅: stdin JSON → 한 줄)
+      backups                          백업 목록
+      restore <file|latest>            백업 복원
+    """),
 ]

@@ -38,7 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.global(qos: .userInitiated).async {
             let st = gatherStatus()
             var pols: [BackendKind: ContextPolicy] = [:]
-            for k in [BackendKind.strata, .lmstudio] where st.backends.first(where: { $0.kind == k })?.present == true {
+            for k in [BackendKind.strata, .lmstudio, .custom] where st.backends.first(where: { $0.kind == k })?.present == true {
                 pols[k] = policyFor(k)
             }
             let res = strataResidency()
@@ -133,7 +133,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         // switch items
-        for kind in [BackendKind.official, .lmstudio, .strata] {
+        let declared = backend(.custom)?.present == true
+        let switchKinds: [BackendKind] = declared
+            ? [.official, .lmstudio, .strata, .custom] : [.official, .lmstudio, .strata]
+        for kind in switchKinds {
             let key: String = kind == .official ? "menu.official"
                 : kind == .lmstudio ? "menu.lmstudio" : "menu.strata"
             let it = NSMenuItem(title: T(key), action: #selector(doSwitch(_:)), keyEquivalent: "")
@@ -146,13 +149,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if !suffix.isEmpty { it.attributedTitle = colored(T(key), suffix) }
             menu.addItem(it)
         }
+        let setEp = NSMenuItem(title: T("menu.custom.set"),
+                               action: #selector(doSetEndpoint), keyEquivalent: "")
+        setEp.target = self
+        menu.addItem(setEp)
+        if declared {
+            let clr = NSMenuItem(title: T("menu.custom.clear"),
+                                 action: #selector(doClearEndpoint), keyEquivalent: "")
+            clr.target = self
+            menu.addItem(clr)
+        }
         menu.addItem(.separator())
 
         // models
         let modelsItem = NSMenuItem(title: T("menu.models"), action: nil, keyEquivalent: "")
         let modelsSub = NSMenu()
         let cfgSel = Store.load().modelFor
-        for kind in [BackendKind.lmstudio, .strata] {
+        for kind in [BackendKind.lmstudio, .strata, .custom] {
             guard let b = backend(kind), !b.models.isEmpty else { continue }
             let group = NSMenuItem(title: b.title, action: nil, keyEquivalent: "")
             let gsub = NSMenu()
@@ -175,7 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // context / compaction policy
         let ctxItem = NSMenuItem(title: T("menu.context"), action: nil, keyEquivalent: "")
         let ctxSub = NSMenu()
-        for kind in [BackendKind.strata, .lmstudio] {
+        for kind in [BackendKind.strata, .lmstudio, .custom] {
             guard let p = policies[kind] else { continue }
             addDisabled(ctxSub, kindTitle(kind))
             addDisabled(ctxSub, "  " + policyLine(p) + "  (" + p.windowReason + ")")
@@ -235,7 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let newSess = NSMenuItem(title: T("menu.newsession"), action: nil, keyEquivalent: "")
         let newSub = NSMenu()
-        for kind in [BackendKind.lmstudio, .strata] {
+        for kind in [BackendKind.lmstudio, .strata, .custom] {
             let mi = NSMenuItem(title: backend(kind)?.title ?? kind.rawValue,
                                 action: #selector(doCopyCommand(_:)), keyEquivalent: "")
             mi.target = self
@@ -249,7 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let restoreSub = NSMenu()
         let backups = SettingsEditor().listBackups()
         if backups.isEmpty {
-            let none = NSMenuItem(title: "(없음 / none)", action: nil, keyEquivalent: "")
+            let none = NSMenuItem(title: T("ui.none"), action: nil, keyEquivalent: "")
             none.isEnabled = false
             restoreSub.addItem(none)
         } else {
@@ -342,9 +355,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
 
-    /// which backend's overrides the toggles edit: the current one if local, else strata
+    /// Which backend's overrides the toggles edit: the current one if it is one of
+    /// ours, otherwise Strata.
     var statusKind: BackendKind {
-        status.currentKind == .lmstudio ? .lmstudio : .strata
+        switch status.currentKind {
+        case .lmstudio: return .lmstudio
+        case .custom:   return .custom
+        default:        return .strata
+        }
+    }
+
+    // MARK: declared endpoint
+
+    /// Three fields: address, key, model id. The key field is secure.
+    private func endpointFields(_ c: CustomEndpoint?)
+        -> (NSStackView, NSTextField, NSSecureTextField, NSTextField) {
+        let stack = NSStackView(frame: NSRect(x: 0, y: 0, width: 340, height: 132))
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 5
+        let baseF = NSTextField(frame: NSRect(x: 0, y: 0, width: 330, height: 22))
+        baseF.placeholderString = "http://127.0.0.1:8080"
+        baseF.stringValue = c?.base ?? ""
+        let tokenF = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 330, height: 22))
+        tokenF.stringValue = c?.token ?? ""
+        let modelF = NSTextField(frame: NSRect(x: 0, y: 0, width: 330, height: 22))
+        modelF.placeholderString = "model id"
+        modelF.stringValue = c?.model ?? ""
+        for (label, field) in [(T("dialog.base"), baseF as NSView),
+                               (T("dialog.token"), tokenF as NSView),
+                               (T("dialog.model"), modelF as NSView)] {
+            stack.addArrangedSubview(NSTextField(labelWithString: label))
+            stack.addArrangedSubview(field)
+        }
+        return (stack, baseF, tokenF, modelF)
+    }
+
+    @objc func doSetEndpoint(_ s: NSMenuItem) {
+        let (stack, baseF, tokenF, modelF) = endpointFields(Store.load().custom)
+        let alert = NSAlert()
+        alert.messageText = T("menu.custom")
+        alert.addButton(withTitle: T("ui.ok"))
+        alert.addButton(withTitle: T("ui.cancel"))
+        alert.accessoryView = stack
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { rebuildMenu(); return }
+        var base = baseF.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        while base.hasSuffix("/v1") { base = String(base.dropLast(3)) }
+        guard !base.isEmpty else {
+            lastResult = "✗ " + T("dialog.base")
+            rebuildMenu()
+            return
+        }
+        var cfg = Store.load()
+        cfg.custom = CustomEndpoint(
+            title: nil, base: base,
+            token: tokenF.stringValue.isEmpty ? nil : tokenF.stringValue,
+            model: modelF.stringValue.isEmpty ? nil : modelF.stringValue)
+        Store.save(cfg)
+        logEvent("custom.set", ["base": base, "token": tokenF.stringValue,
+                                "model": modelF.stringValue])
+        lastResult = "✓ " + T("menu.custom") + ": " + base
+        lastGather = nil
+        refreshAsync()
+        rebuildMenu()
+    }
+
+    @objc func doClearEndpoint(_ s: NSMenuItem) {
+        var cfg = Store.load()
+        cfg.custom = nil
+        Store.save(cfg)
+        logEvent("custom.clear")
+        lastResult = "✓ " + T("menu.custom.clear")
+        lastGather = nil
+        refreshAsync()
+        rebuildMenu()
     }
 
     @objc func doToggleStatusline(_ s: NSMenuItem) {
@@ -381,7 +466,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         runWork {
             var lines: [String] = []
             var any = false
-            for kind in [BackendKind.strata, .lmstudio] {
+            for kind in [BackendKind.strata, .lmstudio, .custom] {
                 if let p = writeProfileFile(kind: kind, model: nil) {
                     any = true
                     lines.append("\(kind.rawValue): \(p.path)")
@@ -407,7 +492,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(p.command, forType: .string)
-            return SwitchResult(ok: true, message: "클립보드 복사: \(p.command)")
+            return SwitchResult(ok: true, message: T("ui.clipboard") + " " + p.command)
         }
     }
 
@@ -416,7 +501,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         runWork {
             do {
                 _ = try SettingsEditor().restore(backupFile: file)
-                return SwitchResult(ok: true, message: "복원 완료: \((file as NSString).lastPathComponent)")
+                return SwitchResult(ok: true,
+                    message: T("ui.restored") + " " + (file as NSString).lastPathComponent)
             } catch let e as SettingsFailure {
                 return SwitchResult(ok: false, message: e.message)
             } catch {
@@ -436,7 +522,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func doToggleAutostart() {
         guard Bundle.main.bundleURL.pathExtension == "app" else {
-            lastResult = "⚠ " + T("menu.autostart") + ": .app 번들에서만 지원"
+            lastResult = "⚠ " + T("menu.autostart") + ": " + T("ui.autostart.bundleOnly")
             return
         }
         do {

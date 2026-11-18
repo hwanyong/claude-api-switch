@@ -132,15 +132,22 @@ func statuslineMain() -> Int32 {
     // Which backend is this session on? The profile env is inherited by the child.
     let env = ProcessInfo.processInfo.environment
     let base = env[ENV_BASE]
-    let kind: BackendKind = strataInstances().contains(where: { "http://\($0.host):\($0.port)" == base })
-        ? .strata : (base != nil && base!.contains("127.0.0.1:1234") ? .lmstudio : .official)
+    var kind: BackendKind = .official
+    if let base {
+        if strataInstances().contains(where: { "http://\($0.host):\($0.port)" == base }) { kind = .strata }
+        else if base.contains("127.0.0.1:1234") { kind = .lmstudio }
+        else { kind = .custom }
+    }
 
     var budget: Int?
-    if isLocalKind(kind) {
+    if isLocalKind(kind, base: base) {
         let ov = Store.load().policyFor?[kind.rawValue] ?? BackendPolicy()
+        // The residency numbers come from log lines only the Strata engine writes,
+        // so no other backend gets a budget figure it did not produce.
+        let res = kind == .strata ? Watch.residency() : nil
         let p = derivePolicy(kind: kind, model: model,
                              modelWindow: window ?? parseTokenAmount(env[ENV_MAXCTX] ?? ""),
-                             residency: Watch.residency(), ov: ov)
+                             residency: res, ov: ov, base: base)
         budget = p.perSessionBudget
     }
 

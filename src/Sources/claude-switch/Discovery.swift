@@ -75,6 +75,34 @@ func discoverStrata() -> Backend {
     return b
 }
 
+// MARK: - declared endpoint (address, key and model typed in by the user)
+
+/// The endpoint declared with `custom set` or the menu item. Detection stays live:
+/// GET /v1/models decides "serving", and its meta.n_ctx decides the model window.
+func discoverCustom(cfg: StoreConfig) -> Backend {
+    var b = Backend(kind: .custom, title: T("menu.custom"))
+    guard let c = cfg.custom, !c.base.isEmpty else { return b }
+    let base = c.base.hasSuffix("/") ? String(c.base.dropLast()) : c.base
+    b.present = true
+    b.base = base
+    b.token = c.token
+    if let t = c.title, !t.isEmpty { b.title = t }
+    else if let host = URL(string: base)?.host { b.title = host }
+
+    let r = fetchModels(base: base, token: c.token)
+    guard r.ok else {
+        b.notes.append(r.error ?? "http not ok")
+        return b
+    }
+    b.serving = true
+    b.models = r.models
+    let sel = cfg.modelFor?["custom"] ?? c.model
+    let hit = r.models.first { m in m.id == sel || (sel != nil && m.aliases.contains(sel!)) }
+    b.model = hit?.id ?? sel ?? r.models.first?.id
+    if let ctx = hit?.ctx { b.notes.append("ctx \(ctx)") }
+    return b
+}
+
 // MARK: - LM Studio (Bionic) discovery
 
 func findLmsBinary() -> String? {

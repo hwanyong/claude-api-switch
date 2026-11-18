@@ -55,12 +55,59 @@ func cliMain(_ args: [String]) -> Int32 {
         return 0
 
     case "list":
-        for k in ["official", "lmstudio", "strata"] { print(k) }
+        var kinds = ["official", "lmstudio", "strata"]
+        if Store.load().custom?.base.isEmpty == false { kinds.append("custom") }
+        for k in kinds { print(k) }
         return 0
+
+    case "custom":
+        // custom set --base URL [--token K] [--model id] [--title NAME] | show | clear
+        switch rest.first ?? "show" {
+        case "set":
+            guard let rawBase = opt("--base") else {
+                print("usage: custom set --base URL [--token K] [--model id] [--title NAME]"); return 2
+            }
+            var c = CustomEndpoint(title: opt("--title"),
+                                   base: rawBase.trimmingCharacters(in: .whitespaces),
+                                   token: opt("--token"), model: opt("--model"))
+            // Claude Code appends /v1/messages itself, so a trailing /v1 would double it.
+            while c.base.hasSuffix("/v1") { c.base = String(c.base.dropLast(3)) }
+            if c.base.isEmpty { print("empty --base"); return 2 }
+            var cfg = Store.load()
+            cfg.custom = c
+            Store.save(cfg)
+            logEvent("custom.set", ["base": c.base, "token": c.token ?? "", "model": c.model ?? ""])
+            let b = discoverCustom(cfg: cfg)
+            print("declared: \(b.title) \(b.base ?? "")")
+            guard b.serving else { print(T("note.custom.down")); return 1 }
+            print("serving: \(b.models.count) models")
+            for m in b.models.prefix(12) {
+                let ctx = m.ctx.map { " n_ctx=\($0)" } ?? ""
+                print("  " + m.id + ctx)
+            }
+            return 0
+        case "show":
+            guard let c = Store.load().custom, !c.base.isEmpty else { print("no custom endpoint"); return 1 }
+            print("title: \(c.title ?? "")")
+            print("base: \(c.base)")
+            print("token: " + (c.token.map { maskSecret($0) } ?? ""))
+            print("model: \(c.model ?? "")")
+            return 0
+        case "clear":
+            var cfg = Store.load()
+            cfg.custom = nil
+            Store.save(cfg)
+            logEvent("custom.clear")
+            print("cleared")
+            return 0
+        default:
+            print("usage: custom set --base URL [--token K] [--model id] [--title NAME] | show | clear")
+            return 2
+        }
 
     case "switch":
         guard let target = rest.first, let kind = BackendKind(rawValue: target) else {
-            print("usage: switch official|lmstudio|strata [--model id] [--no-autostart]"); return 2
+            print("usage: switch official|lmstudio|strata|custom [--model id] [--no-autostart]"); return 2
         }
         let r = switchTo(kind, model: opt("--model"), autoStart: !args.contains("--no-autostart"))
         print(r.message)
@@ -68,7 +115,7 @@ func cliMain(_ args: [String]) -> Int32 {
 
     case "models":
         guard let target = rest.first, let kind = BackendKind(rawValue: target) else {
-            print("usage: models lmstudio|strata"); return 2
+            print("usage: models lmstudio|strata|custom"); return 2
         }
         guard let b = backendFor(kind), b.serving else { print("not serving"); return 1 }
         for m in b.models {
@@ -80,7 +127,7 @@ func cliMain(_ args: [String]) -> Int32 {
 
     case "check":
         guard let target = rest.first, let kind = BackendKind(rawValue: target) else {
-            print("usage: check official|lmstudio|strata"); return 2
+            print("usage: check official|lmstudio|strata|custom"); return 2
         }
         if kind == .official {
             let kc = runProcess("/usr/bin/security",
@@ -111,9 +158,10 @@ func cliMain(_ args: [String]) -> Int32 {
         // policy [kind] [--window 120k] [--sessions N] [--wait S] [--hard|--soft] [--json]
         var kindArg: String? = nil
         for a in rest where !a.hasPrefix("-") { kindArg = a; break }
-        let kinds: [BackendKind] = kindArg != nil
+        var kinds: [BackendKind] = kindArg != nil
             ? (BackendKind(rawValue: kindArg!).map { [$0] } ?? [])
             : [.strata, .lmstudio]
+        if kindArg == nil && Store.load().custom?.base.isEmpty == false { kinds.append(.custom) }
         if kindArg != nil && kinds.isEmpty { print("unknown backend: \(kindArg!)"); return 2 }
         // flags edit the stored override before printing
         for kind in kinds {
@@ -238,20 +286,5 @@ func cliMain(_ args: [String]) -> Int32 {
 }
 
 func printUsage() {
-    print("""
-    claude-switch — Claude Code API 스위치 (메뉴바 앱 CLI 모드)
-
-      status [--json]                 현재 상태/감지 결과
-      list                            지원 백엔드
-      switch <kind> [--model id]      전역 전환 (official|lmstudio|strata)
-      models <kind>                   감지된 모델 목록
-      check <kind>                    /v1/messages 왕복 확인
-      profile <kind> [--model id]     세션형 런처 프로파일 생성+명령 출력
-      policy [kind] [flags] [--json]  auto-compact 창/상주 예산 계산·저장
-                                      (--window 120k|auto, --sessions N, --wait S, --hard/--soft)
-      watch [--minutes N] [--json]    세션별 컨텍스트 토큰 부하
-      statusline                      (claude statusLine 훅: stdin JSON → 경고 한 줄)
-      backups                         백업 목록
-      restore <file|latest>           백업 복원
-    """)
+    print(T("cli.usage"))
 }
