@@ -38,7 +38,11 @@ jobs:
           BIN=dist/ClaudeAPISwitch.app/Contents/MacOS/claude-switch
           "$BIN" list
           "$BIN" status --json | head -40
-          "$BIN" nosuchcommand; test $? -eq 2
+          # The dispatcher exits 2 on an unknown verb, so this call is expected to
+          # fail. The step runs under `bash -e`, so a bare failing command ends the
+          # step right there: the check has to capture the status instead.
+          rc=0; "$BIN" nosuchcommand || rc=$?
+          test "$rc" -eq 2
           codesign -dv dist/ClaudeAPISwitch.app 2>&1 | head -5
 
       - uses: actions/upload-artifact@v4
