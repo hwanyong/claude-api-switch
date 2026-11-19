@@ -2,11 +2,20 @@ name: build
 
 # Every push and pull request compiles the app and runs the CLI's read-only path.
 # A push of a v* tag additionally publishes dist/ClaudeAPISwitch.app.zip as a Release.
+# The board is not code. Run 10 (commit 3a38cb5, four card files and nothing else)
+# built the app on a macos-15 runner just because a card moved, so kanban/ and
+# .uhd-kanban/ start nothing. Path filters are not evaluated for pushes of tags
+# (workflow-syntax reference), so this cannot hold back a v* release. GitHub
+# documents YAML anchors, hence one list aliased twice.
 on:
   push:
     branches: [main]
     tags: ["v*"]
+    paths-ignore: &board-only
+      - "kanban/**"
+      - ".uhd-kanban/**"
   pull_request:
+    paths-ignore: *board-only
 
 # GitHub hosts two GA macOS images at a time and retires the oldest one when a
 # new GA image lands, so a pinned label has to be bumped now and then: macos-14
