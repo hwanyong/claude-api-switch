@@ -82,6 +82,9 @@ come from the 2026-11-18 Mac Studio capture described in H, not from this VM.
 | macOS 27 `SMAppService` consent sheet | kept as is; the CLI reports `supported only from a .app bundle` when run outside a bundle |
 | Menu coordinate automation for screenshots | still coordinate-based. It drives the app, it is not part of it. The status item is re-located before every click, because neighbouring menu bar text changes width and moves it by tens of pixels |
 | Menu row for a declared endpoint labelled `Strata` | fixed 2026-11-18 while preparing `docs/assets/menu.png`: `rebuildMenu()` in `UIApp.swift` picked the `menu.strata` string for `BackendKind.custom`. A screenshot showed it; no CLI output ever did |
+| Submenu screenshots | not published. `NSMenu` windows are invisible to `cua-driver`, so a row is clicked at measured coordinates; on one run the status item had drifted and the locator matched a neighbouring third-party item, opening that app's menu instead |
+| `Set custom endpoint…` dialog: the address caption rendered partly hidden | fixed 2026-11-18: `doSetEndpoint` now sets `NSAlert.informativeText` to `T("dialog.base")` instead of putting that caption at the top of the accessory stack, and `endpointFields` sizes the stack from its own `fittingSize`. Captures before and after: before, the lower part of the caption was gone; after, all three captions render |
+| `Set custom endpoint…` dialog: the value of the focused field renders clipped in `screencapture` images | open. It shows only in captures and only on the field that holds keyboard focus. Four layout changes (stack height 132 to `fittingSize`, a 16 point spacer row, 16 point `edgeInsets`, field height 22 to 28) left it unchanged, so it is not an overlap of the stack or of the alert's rows. No published image shows that dialog |
 | `BackendKind.custom` detected but not switchable | fixed 2026-11-18, see F |
 | LM Studio sessions given a Strata-derived KV budget | fixed 2026-11-18: `isLocalKind` takes the endpoint base, so a backend gets a budget only from measurements it produced |
 
@@ -151,3 +154,15 @@ endpoint, the echo server was stopped, `/tmp/ccdemo` was deleted, and the app's 
 `config.json` was put back. The real `~/.claude/settings.json` md5 was
 `d4d6f6681c7ff702eecbc9b0de0f5af4` before the run and `d4d6f6681c7ff702eecbc9b0de0f5af4`
 after it, and its `env` still holds only `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
+
+One row click was mis-measured and hit `LM Studio (Bionic)` instead of a submenu parent. That
+ran the autostart path against a real LM Studio on this Mac: the app started its server,
+`switch.ok` logged `base: http://127.0.0.1:1234` together with
+`model window unknown: /v1/models reports no n_ctx, so the real window cannot be stated`, and
+`lms server stop` returned the server to the state it was in before the run. The instance
+pointed at `/tmp/ccdemo`, so that switch wrote the fixture `settings.json`, not `~/.claude`.
+
+The submenu captures stopped there: `NSMenu` cannot be read, the row offsets move once a result
+line appears in the menu, and one re-locate of the status item matched a neighbouring menu bar
+item and opened that application's menu. The `Model` and `Context / compaction` submenus are
+described in the README tables instead of shown.

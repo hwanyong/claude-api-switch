@@ -368,10 +368,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: declared endpoint
 
-    /// Three fields: address, key, model id. The key field is secure.
+    /// Three fields: address, key, model id. The key field is secure. The address caption is
+    /// not here: NSAlert draws its own text block over the top of the accessory view, and a
+    /// caption placed there came out half hidden. doSetEndpoint puts it in informativeText.
     private func endpointFields(_ c: CustomEndpoint?)
-        -> (NSStackView, NSTextField, NSSecureTextField, NSTextField) {
-        let stack = NSStackView(frame: NSRect(x: 0, y: 0, width: 340, height: 132))
+        -> (NSView, NSTextField, NSSecureTextField, NSTextField) {
+        let stack = NSStackView(frame: NSRect(x: 0, y: 0, width: 330, height: 22))
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 5
@@ -383,12 +385,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let modelF = NSTextField(frame: NSRect(x: 0, y: 0, width: 330, height: 22))
         modelF.placeholderString = "model id"
         modelF.stringValue = c?.model ?? ""
-        for (label, field) in [(T("dialog.base"), baseF as NSView),
-                               (T("dialog.token"), tokenF as NSView),
-                               (T("dialog.model"), modelF as NSView)] {
-            stack.addArrangedSubview(NSTextField(labelWithString: label))
+        stack.addArrangedSubview(baseF)
+        for (text, field) in [(T("dialog.token"), tokenF as NSView),
+                              (T("dialog.model"), modelF as NSView)] {
+            let caption = NSTextField(labelWithString: text)
+            // Same colour as the alert's own informative text row, which carries the first
+            // caption, so the three captions read as one style.
+            caption.textColor = .secondaryLabelColor
+            stack.addArrangedSubview(caption)
             stack.addArrangedSubview(field)
         }
+        // The stack's frame has to carry the height its own content reports; a frame shorter
+        // than that clips the arranged views inside it.
+        stack.layoutSubtreeIfNeeded()
+        stack.frame = NSRect(x: 0, y: 0, width: 330, height: stack.fittingSize.height)
         return (stack, baseF, tokenF, modelF)
     }
 
@@ -396,6 +406,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let (stack, baseF, tokenF, modelF) = endpointFields(Store.load().custom)
         let alert = NSAlert()
         alert.messageText = T("menu.custom")
+        alert.informativeText = T("dialog.base")
         alert.addButton(withTitle: T("ui.ok"))
         alert.addButton(withTitle: T("ui.cancel"))
         alert.accessoryView = stack
