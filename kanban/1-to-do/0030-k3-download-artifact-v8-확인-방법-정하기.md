@@ -6,7 +6,7 @@ priority: medium
 tags: [model:user]
 depends_on: []
 created_at: 2026-11-19T11:40:51Z
-updated_at: 2026-11-19T11:40:51Z
+updated_at: 2026-11-19T17:44:55Z
 status_history: [2026-11-19T11:40:51Z to-do]
 ---
 
@@ -20,3 +20,9 @@ v8의 계약(이름으로 지정한 산출물을 워크스페이스 루트에 �
 - 기다림: 다음 `v*` 태그에서 저절로 붙는다. 어긋나면 그때 고친다.
 
 결정이 나면 실행 카드를 따로 만들고 이 카드를 그 의존으로 둔다.
+
+## Comments
+
+### c1 [report] from=main to=k3 at=2026-11-19T17:44:55Z
+
+2026-11-19: 커밋 b14ece8이 on.push와 pull_request에 paths-ignore를 넣었다(kanban/**와 .uhd-kanban/**). 카드만 고친 커밋은 macos-15 빌드를 띄우지 않는다. 태그 push는 path 필터를 평가하지 않는다는 규격 문장 때문에 v* 릴리스는 그대로 돈다. 이 카드의 두 갈래(지금 확인하기 / 다음 태그까지 기다리기)는 아직 정해지지 않았다.
