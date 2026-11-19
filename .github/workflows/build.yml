@@ -8,9 +8,15 @@ on:
     tags: ["v*"]
   pull_request:
 
+# GitHub hosts two GA macOS images at a time and retires the oldest one when a
+# new GA image lands, so a pinned label has to be bumped now and then: macos-14
+# is retired, and a job that asks for it dies before any step runs with
+# "The configuration 'macos-14-arm64-us-default' is not supported"
+# (actions/runner-images#15226). macos-15 is the older of the two images
+# available as of 2026-11-19; the app still declares LSMinimumSystemVersion 13.0.
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     permissions:
       contents: read
     steps:
@@ -44,7 +50,7 @@ jobs:
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: macos-14
+    runs-on: macos-15
     permissions:
       contents: write
     steps:
