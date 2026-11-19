@@ -20,7 +20,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Swift version
         run: swift --version
@@ -45,7 +45,7 @@ jobs:
           test "$rc" -eq 2
           codesign -dv dist/ClaudeAPISwitch.app 2>&1 | head -5
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ClaudeAPISwitch-${{ github.ref_name }}
           path: dist/ClaudeAPISwitch.app.zip
@@ -58,7 +58,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: ClaudeAPISwitch-${{ github.ref_name }}
       - name: Publish the zip on the Release
