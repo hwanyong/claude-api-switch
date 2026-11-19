@@ -6,6 +6,8 @@ DIST="${0:A:h}"
 SRC="$DIST/../src"
 # CI stamps the git tag into the bundle; a local build keeps 0.1.0.
 VERSION="${CCSWITCH_VERSION:-0.1.0}"
+# A release tag reads v0.1.0; the bundle's two version fields should read 0.1.0.
+VERSION="${VERSION#v}"
 cd "$SRC"
 swift build -c release
 APP="$DIST/ClaudeAPISwitch.app"
